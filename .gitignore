@@ -1,0 +1,6 @@
+# Build results
+out
+build
+
+# IDE / toolchain files
+.vs
