@@ -6,7 +6,7 @@
 
 using namespace std;
 
-tuple<wstring, bool> ensure_ssl_binding::strconv(string value)
+tuple<wstring, bool> ensure_ssl_binding::strconv_w(string value)
 {
     auto console = spdlog::stdout_color_mt("strconv");
 
@@ -23,4 +23,19 @@ tuple<wstring, bool> ensure_ssl_binding::strconv(string value)
     }
 
     return make_tuple<wstring, bool>(result.c_str(), true);
+}
+
+vector<unsigned char> ensure_ssl_binding::strconv_hb(string value)
+{
+    size_t hashlen = value.length();
+    vector<unsigned char> result(hashlen / 2, 0);
+
+    for (size_t i = 0, j = 0; i < result.size() && j < hashlen;)
+    {
+        result[i] = ((value[j] << 4) & 0xF0 | (value[j+1] & 0x0F));
+        j += 2;
+        i ++;
+    }
+
+    return result;
 }

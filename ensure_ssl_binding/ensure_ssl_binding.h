@@ -3,6 +3,7 @@
 #include <iostream>
 #include <string>
 #include <tuple>
+#include <vector>
 
 // Platform
 #if WIN32
@@ -68,7 +69,14 @@ int set_binding(std::string endpoint, std::string appid, std::string hash);
 /// </summary>
 /// <param name="value">The string to convert</param>
 /// <returns>A tuple containing the converted string and a success flag</returns>
-std::tuple<std::wstring, bool> strconv(std::string value);
+std::tuple<std::wstring, bool> strconv_w(std::string value);
+
+/// <summary>
+/// Converts a hex string to a byte array.
+/// </summary>
+/// <param name="value">The string to convert</param>
+/// <returns>A std::vector<unsigned char> containing the converted data</returns>
+std::vector<unsigned char> strconv_hb(std::string value);
 
 /// <summary>
 /// Performs initialization logic for the platform.

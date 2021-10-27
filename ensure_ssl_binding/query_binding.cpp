@@ -28,7 +28,7 @@ shared_ptr<CertificateBinding> ensure_ssl_binding::query_binding(string endpoint
     queryinput.QueryDesc = HttpServiceConfigQueryExact;
     queryinput.KeyDesc.pIpPort = (LPSOCKADDR)&endpoint_stor;
 
-    auto [w_endpoint, success] = strconv(endpoint);
+    auto [w_endpoint, success] = strconv_w(endpoint);
     if (!success)
     {
         return binding;

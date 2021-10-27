@@ -62,7 +62,70 @@ string CertificateBinding::appid() const
 
 bool CertificateBinding::ensure(string appid, string hash)
 {
-    return true;
+    vector<unsigned char> newhash;
+
+    if (!this->m_valid)
+    {
+        // We never bound to a valid query -- repair is not supported for this
+        // scenario, yet.
+        return false;
+    }
+
+    if (this->m_appid == appid && this->m_hash == hash)
+    {
+        return true;
+    }
+
+    #if WIN32
+
+    HRESULT hr;
+
+    // We must attempt to rebind.
+    if (this->m_hash != hash)
+    {
+        newhash = strconv_hb(hash);
+        this->m_data->ParamDesc.SslHashLength = newhash.size();
+        this->m_data->ParamDesc.pSslHash = &newhash[0];
+    }
+
+    if (this->m_appid != appid)
+    {
+        GUID guid{};
+        if (sscanf_s(
+            appid.c_str(),
+            "%8x-%4hx-%4hx-%2hhx%2hhx-%2hhx%2hhx%2hhx%2hhx%2hhx%2hhx",
+            &guid.Data1,
+            &guid.Data2,
+            &guid.Data3,
+            &guid.Data4[0], &guid.Data4[1],
+            &guid.Data4[2], &guid.Data4[3],
+            &guid.Data4[4], &guid.Data4[5],
+            &guid.Data4[6], &guid.Data4[7]
+        ) != 11)
+        {
+            this->m_valid = false;
+            return false;
+        }
+
+        this->m_data->ParamDesc.AppId = guid;
+    }
+
+    this->m_data->ParamDesc.pSslCertStoreName = L"My";
+    hr = HttpSetServiceConfiguration(
+        NULL,
+        HttpServiceConfigSSLCertInfo,
+        this->m_data.get(),
+        sizeof(*this->m_data),
+        NULL
+    );
+
+    return hr == NO_ERROR;
+
+    #else
+
+    return false;
+
+    #endif
 }
 
 bool CertificateBinding::is_valid() const
