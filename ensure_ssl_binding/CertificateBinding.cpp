@@ -76,7 +76,7 @@ bool CertificateBinding::ensure(string appid, string hash)
         return true;
     }
 
-    #if WIN32
+#if WIN32
 
     HRESULT hr;
 
@@ -121,11 +121,11 @@ bool CertificateBinding::ensure(string appid, string hash)
 
     return hr == NO_ERROR;
 
-    #else
+#else
 
     return false;
 
-    #endif
+#endif // WIN32
 }
 
 bool CertificateBinding::is_valid() const
