@@ -1,7 +1,8 @@
-﻿// ensure_ssl_binding.cpp : Defines the entry point for the application.
+// ensure_ssl_binding.cpp : Defines the entry point for the application.
 //
 
 #include <map>
+#include <CLI/CLI.hpp>
 
 #include "ensure_ssl_binding.h"
 
@@ -39,9 +40,9 @@ int main(int argc, char** argv)
 	auto console = spdlog::stdout_color_mt("app");
 
 	// The user has provided sufficient arguments, so we can proceed.
-	if (!init_platform())
+	if (!init())
 	{
-		console->error("Failed platform initialization");
+		console->error("Failed to initialize");
 	}
 
 	auto binding = query_binding(endpoint);
@@ -54,6 +55,6 @@ int main(int argc, char** argv)
 		console->error("Binding is unhealthy and unrepairable");
 	}
 
-	cleanup_platform();
+	cleanup();
 	return binding->is_valid() ? 0 : 1;
 }

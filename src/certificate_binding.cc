@@ -31,16 +31,10 @@ void CertificateBinding::bindquery(PHTTP_SERVICE_CONFIG_SSL_SET data)
         this->m_valid = false;
     }
 
-    stringstream ss;
     PUCHAR p_hash = (PUCHAR)data->ParamDesc.pSslHash;
-    for (size_t i = 0; i < data->ParamDesc.SslHashLength; i++)
-    {
-        string buff(2, '\0');
-        snprintf(&buff[0], 3, "%02x", p_hash[i]);
-        ss << buff;
-    }
+    vector<unsigned char> bytes(p_hash, p_hash + data->ParamDesc.SslHashLength);
     
-    this->m_hash = ss.str();
+    this->m_hash = strconv_bh(bytes);
 }
 
 shared_ptr<HTTP_SERVICE_CONFIG_SSL_SET> CertificateBinding::data()

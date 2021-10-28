@@ -1,6 +1,4 @@
-
-#include <codecvt>
-#include <locale>
+#include <sstream>
 
 #include "ensure_ssl_binding.h"
 
@@ -32,10 +30,23 @@ vector<unsigned char> ensure_ssl_binding::strconv_hb(string value)
 
     for (size_t i = 0, j = 0; i < result.size() && j < hashlen;)
     {
-        result[i] = ((value[j] << 4) & 0xF0 | (value[j+1] & 0x0F));
+        result[i] = (unsigned char)stoul(value.substr(j, 2), nullptr, 16);
         j += 2;
         i ++;
     }
 
     return result;
+}
+
+string ensure_ssl_binding::strconv_bh(vector<unsigned char> value)
+{
+    stringstream ss;
+    for (size_t i = 0; i < value.size(); i++)
+    {
+        string buff(2, '\0');
+        snprintf(&buff[0], 3, "%02x", value[i]);
+        ss << buff;
+    }
+
+    return ss.str();
 }

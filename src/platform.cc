@@ -1,6 +1,6 @@
 #include "ensure_ssl_binding.h"
 
-bool ensure_ssl_binding::init_platform()
+bool ensure_ssl_binding::init()
 {
     auto console = spdlog::stdout_color_mt("init_platform");
     HRESULT hr;
@@ -24,7 +24,7 @@ bool ensure_ssl_binding::init_platform()
     return true;
 }
 
-void ensure_ssl_binding::cleanup_platform()
+void ensure_ssl_binding::cleanup()
 {
     WSACleanup();
     HttpTerminate(HTTP_INITIALIZE_CONFIG, NULL);

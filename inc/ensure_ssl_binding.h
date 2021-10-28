@@ -7,14 +7,28 @@
 
 // Platform
 #if WIN32
+
 #define WIN32_LEAN_AND_MEAN
 
 #include <Windows.h>
 #include <http.h>
+
+#else
+
+#ifndef _GUID
+typedef struct _GUID {
+    unsigned long  Data1;
+    unsigned short Data2;
+    unsigned short Data3;
+    unsigned char  Data4[8];
+} GUID;
+
 #endif
 
+#endif
+
+
 // 3rd-party libs
-#include "CLI11.hpp"
 #include "spdlog/spdlog.h"
 #include "spdlog/sinks/stdout_color_sinks.h"
 
@@ -78,17 +92,22 @@ std::tuple<std::wstring, bool> strconv_w(std::string value);
 /// <returns>A std::vector<unsigned char> containing the converted data</returns>
 std::vector<unsigned char> strconv_hb(std::string value);
 
-/// <summary>
-/// Performs initialization logic for the platform.
-/// </summary>
-/// <returns>True if initalization was successfull</returns>
-bool init_platform();
+/**
+ * Convert a byte array to a hex string.
+ */
+std::string strconv_bh(std::vector<unsigned char> value);
 
-/// <summary>
-/// Performs cleanup logic for the platform.
-/// <summary>
-void cleanup_platform();
+/**
+ * Convert a GUID to a string
+ */
+std::string strconv_gtos(GUID guid);
+
+/**
+ * Convert a string to a GUID
+ */
+GUID strconv_stog(std::string value);
+
+bool init();
+void cleanup();
 
 } // namespace ensure_ssl_binding
-
-int main(int argc, char** argv);

@@ -1,16 +1,66 @@
 ﻿# CMakeList.txt : Top-level CMake project file, do global configuration
 # and include sub-projects here.
 #
-cmake_minimum_required (VERSION 3.10)
+cmake_minimum_required (VERSION 3.20)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-# set(SPDLOG_WCHAR_SUPPORT ON)
 
-project ("spdlog")
-project ("ensure_ssl_binding")
+project(
+  bindssl
+  VERSION 0.0.1
+  LANGUAGES CXX
+)
 
-# Include sub-projects.
-add_subdirectory ("spdlog")
-add_subdirectory ("ensure_ssl_binding")
+include(FetchContent)
+
+# Dependencies
+FetchContent_Declare(
+    spdlog
+    URL https://github.com/gabime/spdlog/archive/eb3220622e73a4889eee355ffa37972b3cac3df5.zip
+)
+
+FetchContent_Declare(
+    CLI11
+    URL https://github.com/CLIUtils/CLI11/archive/70f8072f9dd2292fd0b9f9e5f58e279f60483ed3.zip
+)
+
+# Artifact definition
+add_library(
+  ${PROJECT_NAME}
+  
+  inc/ensure_ssl_binding.h
+
+  src/certificate_binding.cc
+  src/platform.cc
+  src/query_binding.cc
+  src/strconv.cc
+)
+
+set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 17)
+
+FetchContent_MakeAvailable(spdlog)
+FetchContent_MakeAvailable(cli11)
+
+if (WIN32)
+  target_link_libraries(
+    ${PROJECT_NAME}
+    httpapi
+    Ws2_32
+  )
+endif()
+
+target_link_libraries(
+  ${PROJECT_NAME}
+  CLI11::CLI11
+  spdlog::spdlog
+)
+
+target_include_directories(
+  ${PROJECT_NAME} PUBLIC inc
+)
+
+# sub projects
+add_subdirectory(app)
+add_subdirectory(test)
