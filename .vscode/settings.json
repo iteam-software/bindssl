@@ -80,7 +80,10 @@
         "xstddef": "cpp",
         "xtr1common": "cpp",
         "xtree": "cpp",
-        "xutility": "cpp"
+        "xutility": "cpp",
+        "any": "cpp",
+        "unordered_set": "cpp"
     },
+    "editor.rulers": [ 80 ],
     "editor.tabSize": 2
 }

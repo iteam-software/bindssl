@@ -1,128 +1,104 @@
-#include <sstream>
+#include "certificate_binding.h"
+#include "endpoint.h"
+#include "guid.h"
+#include "hash.h"
 
-#include "ensure_ssl_binding.h"
+#include <memory>
+#include <tuple>
+#include <vector>
 
-using namespace std;
-using namespace ensure_ssl_binding;
-
-CertificateBinding::CertificateBinding(string endpoint) : m_endpoint(endpoint) { }
-
-#if WIN32
-
-void CertificateBinding::bindquery(PHTTP_SERVICE_CONFIG_SSL_SET data)
-{
-    this->m_appid = string();
-    this->m_appid.resize(36);
-    this->m_data = shared_ptr<HTTP_SERVICE_CONFIG_SSL_SET>(data, LocalFree);
-    this->m_valid = true; // Optimistic initialization
-
-    if (snprintf(
-        &this->m_appid[0],
-        37,
-        "%x-%x-%x-%x%x-%x%x%x%x%x%x",
-        data->ParamDesc.AppId.Data1,
-        data->ParamDesc.AppId.Data2,
-        data->ParamDesc.AppId.Data3,
-        data->ParamDesc.AppId.Data4[0], data->ParamDesc.AppId.Data4[1],
-        data->ParamDesc.AppId.Data4[2], data->ParamDesc.AppId.Data4[3],
-        data->ParamDesc.AppId.Data4[4], data->ParamDesc.AppId.Data4[5],
-        data->ParamDesc.AppId.Data4[6], data->ParamDesc.AppId.Data4[7]
-    ) < 0) {
-        this->m_valid = false;
-    }
-
-    PUCHAR p_hash = (PUCHAR)data->ParamDesc.pSslHash;
-    vector<unsigned char> bytes(p_hash, p_hash + data->ParamDesc.SslHashLength);
-    
-    this->m_hash = strconv_bh(bytes);
+bindssl::CertificateBinding::CertificateBinding(const bindssl::BindingSet& data) {
+  app_id_guid = data.ParamDesc.AppId;
+  hash_bytes = std::vector<Byte>(
+      (int)data.ParamDesc.pSslHash,
+      (int)data.ParamDesc.pSslHash + (int)data.ParamDesc.SslHashLength);
+  
+  auto [hash, hash_success] = ConvertToHexString(hash_bytes);
+  if (hash_success) {
+    hash = hash;
+  }
+  
+  auto [guid, guid_success] = GuidToString(data.ParamDesc.AppId);
+  if (guid_success) {
+    app_id = guid;
+  }
 }
 
-shared_ptr<HTTP_SERVICE_CONFIG_SSL_SET> CertificateBinding::data()
-{
-    return this->m_data;
+bindssl::Result<bindssl::BindingQuery>
+MakeQuery(std::shared_ptr<bindssl::Endpoint> address) {
+  return std::make_tuple(bindssl::BindingQuery{
+    HttpServiceConfigQueryExact,
+    HTTP_SERVICE_CONFIG_SSL_KEY{
+      (LPSOCKADDR)address.get()
+    }
+  }, true);
 }
 
-#endif // WIN32
+bindssl::Result<bindssl::BindingSet>
+MakeNewBindingSet(std::string address, std::string hash_s, std::string guid_s) {
+  bindssl::BindingSet set{};
+  auto [endpoint, endpoint_success] = bindssl::SockAddressFromString(address);
+  if (!endpoint_success) {
+    return std::make_tuple(std::move(set), false);
+  }
 
-string CertificateBinding::hash() const
-{
-    return this->m_hash;
+  auto [hashbytes, hashbytes_success] = bindssl::ConvertHexToBytes(hash_s);
+  if (!hashbytes_success) {
+    return std::make_tuple(std::move(set), false);
+  }
+
+  auto [guid, guid_success] = bindssl::GuidFromString(guid_s);
+  if (!guid_success) {
+    return std::make_tuple(std::move(set), false);
+  }
+
+  set.KeyDesc.pIpPort = (LPSOCKADDR)endpoint.get();
+  set.ParamDesc.AppId = guid;
+  set.ParamDesc.pSslHash = &hashbytes[0];
+  set.ParamDesc.SslHashLength = hashbytes.size();
+  set.ParamDesc.pSslCertStoreName = L"My";
+
+  return std::make_tuple(std::move(set), true);
 }
 
-string CertificateBinding::appid() const
-{
-    return this->m_appid;
+bindssl::Result<bindssl::ULong>
+bindssl::GetQueryBindingSize(const bindssl::BindingQuery& query) {
+  ULong size{0};
+  HRESULT hr = HttpQueryServiceConfiguration(
+      NULL, HttpServiceConfigSSLCertInfo,
+      (void*)&query, sizeof(query), nullptr,
+      size, &size, NULL);
+
+  return std::make_tuple(size, hr == ERROR_INSUFFICIENT_BUFFER);
 }
 
-bool CertificateBinding::ensure(string appid, string hash)
-{
-    vector<unsigned char> newhash;
+bindssl::Result<std::shared_ptr<bindssl::CertificateBinding>>
+bindssl::GetBinding(const std::string endpoint,
+    const bindssl::BindingQuery& query,
+    bindssl::ULong size) {
+  bindssl::BindingSet data{};
+  HRESULT hr = HttpQueryServiceConfiguration(
+      NULL, HttpServiceConfigSSLCertInfo,
+      (void*)&query, sizeof(query), &data,
+      size, &size, NULL);
+  if (hr != NO_ERROR) {
+    return std::make_tuple(nullptr, false);  
+  }
 
-    if (!this->m_valid)
-    {
-        // We never bound to a valid query -- repair is not supported for this
-        // scenario, yet.
-        return false;
-    }
-
-    if (this->m_appid == appid && this->m_hash == hash)
-    {
-        return true;
-    }
-
-#if WIN32
-
-    HRESULT hr;
-
-    // We must attempt to rebind.
-    if (this->m_hash != hash)
-    {
-        newhash = strconv_hb(hash);
-        this->m_data->ParamDesc.SslHashLength = newhash.size();
-        this->m_data->ParamDesc.pSslHash = &newhash[0];
-    }
-
-    if (this->m_appid != appid)
-    {
-        GUID guid{};
-        if (sscanf_s(
-            appid.c_str(),
-            "%8x-%4hx-%4hx-%2hhx%2hhx-%2hhx%2hhx%2hhx%2hhx%2hhx%2hhx",
-            &guid.Data1,
-            &guid.Data2,
-            &guid.Data3,
-            &guid.Data4[0], &guid.Data4[1],
-            &guid.Data4[2], &guid.Data4[3],
-            &guid.Data4[4], &guid.Data4[5],
-            &guid.Data4[6], &guid.Data4[7]
-        ) != 11)
-        {
-            this->m_valid = false;
-            return false;
-        }
-
-        this->m_data->ParamDesc.AppId = guid;
-    }
-
-    this->m_data->ParamDesc.pSslCertStoreName = L"My";
-    hr = HttpSetServiceConfiguration(
-        NULL,
-        HttpServiceConfigSSLCertInfo,
-        this->m_data.get(),
-        sizeof(*this->m_data),
-        NULL
-    );
-
-    return hr == NO_ERROR;
-
-#else
-
-    return false;
-
-#endif // WIN32
+  auto binding = std::make_shared<CertificateBinding>(CertificateBinding(data));
+  binding->endpoint = endpoint;
+  return std::make_tuple(binding, true);
 }
 
-bool CertificateBinding::is_valid() const
-{
-    return this->m_valid;
+bindssl::Result<std::shared_ptr<bindssl::CertificateBinding>>
+bindssl::SetBinding(
+    const std::string& endpoint,
+    std::shared_ptr<bindssl::BindingSet> set) {
+  HRESULT hr = HttpSetServiceConfiguration(
+    NULL, HttpServiceConfigSSLCertInfo, set.get(), sizeof(*set), NULL);
+  if (hr == NO_ERROR) {
+    return std::make_tuple(
+        std::make_shared<CertificateBinding>(CertificateBinding(set)), true);
+  }
+  return std::make_tuple(nullptr, false);
 }

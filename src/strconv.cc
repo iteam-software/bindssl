@@ -28,11 +28,10 @@ vector<unsigned char> ensure_ssl_binding::strconv_hb(string value)
     size_t hashlen = value.length();
     vector<unsigned char> result(hashlen / 2, 0);
 
-    for (size_t i = 0, j = 0; i < result.size() && j < hashlen;)
+    for (size_t i = 0, j = 0; i < result.size(); ++i)
     {
         result[i] = (unsigned char)stoul(value.substr(j, 2), nullptr, 16);
         j += 2;
-        i ++;
     }
 
     return result;

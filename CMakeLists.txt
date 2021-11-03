@@ -29,30 +29,30 @@ FetchContent_Declare(
 # Artifact definition
 add_library(
   ${PROJECT_NAME}
-  
-  inc/ensure_ssl_binding.h
+    
+  inc/bind_ssl.h
+  inc/certificate_binding.h
+  inc/endpoint.h
+  inc/guid.h
+  inc/hash.h
+  inc/platform.h
+  inc/primitives.h
+  inc/result.h
 
+  src/bind_ssl.cc
+  src/guid.cc
   src/certificate_binding.cc
-  src/platform.cc
-  src/query_binding.cc
-  src/strconv.cc
 )
 
-set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 17)
+# set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 17)
 
 FetchContent_MakeAvailable(spdlog)
 FetchContent_MakeAvailable(cli11)
 
-if (WIN32)
-  target_link_libraries(
-    ${PROJECT_NAME}
-    httpapi
-    Ws2_32
-  )
-endif()
-
 target_link_libraries(
   ${PROJECT_NAME}
+  httpapi
+  Ws2_32
   CLI11::CLI11
   spdlog::spdlog
 )
@@ -62,5 +62,5 @@ target_include_directories(
 )
 
 # sub projects
-add_subdirectory(app)
-add_subdirectory(test)
+# add_subdirectory(app)
+# add_subdirectory(test)
