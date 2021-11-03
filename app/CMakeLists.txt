@@ -12,6 +12,7 @@ add_executable(
 
 add_dependencies(${PROJECT_NAME} bindssl)
 
-set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 17 OUTPUT_NAME "bindssl")
+set_target_properties(
+  ${PROJECT_NAME} PROPERTIES CXX_STANDARD 17 OUTPUT_NAME "bindssl")
 
 target_link_libraries(${PROJECT_NAME} bindssl)

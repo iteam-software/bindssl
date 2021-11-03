@@ -1,13 +1,13 @@
 // ensure_ssl_binding.cpp : Defines the entry point for the application.
 //
-
 #include <map>
+
+#include <bind_ssl.h>
+#include <spdlog/spdlog.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
 #include <CLI/CLI.hpp>
 
-#include "ensure_ssl_binding.h"
-
 using namespace std;
-using namespace ensure_ssl_binding;
 using namespace spdlog::level;
 
 int main(int argc, char** argv)
@@ -40,21 +40,40 @@ int main(int argc, char** argv)
 	auto console = spdlog::stdout_color_mt("app");
 
 	// The user has provided sufficient arguments, so we can proceed.
-	if (!init())
-	{
-		console->error("Failed to initialize");
+	auto [address, address_success] = bindssl::SockAddressFromString(endpoint);
+	if (!address_success) {
+		console->error("Endpoint is invalid");
+		return 1;
 	}
 
-	auto binding = query_binding(endpoint);
-	if (binding->ensure(appid, hash))
-	{
-		console->info("Binding is healthy");
-	}
-	else
-	{
-		console->error("Binding is unhealthy and unrepairable");
+	auto [query, query_success] = bindssl::MakeQuery(address);
+	if (!query_success) {
+		console->error("Unable to query http system for SSL status");
+		return 1;
 	}
 
-	cleanup();
-	return binding->is_valid() ? 0 : 1;
+	auto [size, size_success] = bindssl::GetQueryBindingSize(query);
+	if (!size_success) {
+		console->error("Unable to query http system for SSL status");
+	}
+
+	auto [binding, binding_success] = bindssl::GetBinding(endpoint, query, size);
+	if (!binding_success) {
+		console->info("Binding is unhealthy, attempting to rebind");
+		auto [bindingset, bindingset_success] = bindssl::MakeNewBindingSet(
+				endpoint, hash, appid);
+		if (bindingset_success) {
+			auto [rebind, rebind_success] = bindssl::SetBinding(endpoint, bindingset);
+			if (!rebind_success) {
+				console->error("Unable to rebind");
+				return -1;
+			}
+		} else {
+			console->error("Unable to rebind");
+			return -1;
+		}
+	}
+
+	console->info("Binding is healthy");
+	return 0;
 }

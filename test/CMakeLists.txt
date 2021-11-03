@@ -17,7 +17,7 @@ FetchContent_Declare(
 # Add source to this project's executable.
 add_executable (
   ${PROJECT_NAME}
-  src/strconv_test.cc
+  src/hash_test.cc
 )
 
 add_dependencies(${PROJECT_NAME} bindssl)

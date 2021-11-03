@@ -46,7 +46,7 @@ Result<std::shared_ptr<CertificateBinding>> GetBinding(
 
 Result<std::shared_ptr<CertificateBinding>> SetBinding(
     const std::string& endpoint,
-    std::shared_ptr<bindssl::BindingSet> query);
+    const BindingSet& query);
 
 } // bindssl
 

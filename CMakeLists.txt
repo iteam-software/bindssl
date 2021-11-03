@@ -40,8 +40,10 @@ add_library(
   inc/result.h
 
   src/bind_ssl.cc
-  src/guid.cc
   src/certificate_binding.cc
+  src/endpoint.cc
+  src/guid.cc
+  src/hash.cc
 )
 
 # set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 17)
@@ -62,5 +64,5 @@ target_include_directories(
 )
 
 # sub projects
-# add_subdirectory(app)
-# add_subdirectory(test)
+add_subdirectory(app)
+add_subdirectory(test)

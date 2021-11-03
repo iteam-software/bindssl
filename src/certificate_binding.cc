@@ -7,7 +7,8 @@
 #include <tuple>
 #include <vector>
 
-bindssl::CertificateBinding::CertificateBinding(const bindssl::BindingSet& data) {
+bindssl::CertificateBinding::CertificateBinding(
+    const bindssl::BindingSet& data) {
   app_id_guid = data.ParamDesc.AppId;
   hash_bytes = std::vector<Byte>(
       (int)data.ParamDesc.pSslHash,
@@ -93,9 +94,9 @@ bindssl::GetBinding(const std::string endpoint,
 bindssl::Result<std::shared_ptr<bindssl::CertificateBinding>>
 bindssl::SetBinding(
     const std::string& endpoint,
-    std::shared_ptr<bindssl::BindingSet> set) {
+    const bindssl::BindingSet& set) {
   HRESULT hr = HttpSetServiceConfiguration(
-    NULL, HttpServiceConfigSSLCertInfo, set.get(), sizeof(*set), NULL);
+    NULL, HttpServiceConfigSSLCertInfo, (PVOID)&set, sizeof(set), NULL);
   if (hr == NO_ERROR) {
     return std::make_tuple(
         std::make_shared<CertificateBinding>(CertificateBinding(set)), true);
