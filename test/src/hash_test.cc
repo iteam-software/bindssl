@@ -1,4 +1,4 @@
-#include <hash.h>
+#include <convert.h>
 
 #include <sstream>
 

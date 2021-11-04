@@ -1,105 +1,106 @@
 #include "certificate_binding.h"
 #include "endpoint.h"
 #include "guid.h"
-#include "hash.h"
+#include "convert.h"
+#include "platform.h"
 
 #include <memory>
 #include <tuple>
 #include <vector>
 
+#include "spdlog/sinks/stdout_color_sinks.h"
+
 bindssl::CertificateBinding::CertificateBinding(
-    const bindssl::BindingSet& data) {
-  app_id_guid = data.ParamDesc.AppId;
-  hash_bytes = std::vector<Byte>(
-      (int)data.ParamDesc.pSslHash,
-      (int)data.ParamDesc.pSslHash + (int)data.ParamDesc.SslHashLength);
-  
-  auto [hash, hash_success] = ConvertToHexString(hash_bytes);
-  if (hash_success) {
-    hash = hash;
+    const std::string& endpoint,
+    const std::string& hash,
+    const std::string& appid) {
+  info_ = CertificateBindingInfo(endpoint, hash, appid);
+  logger_ = spdlog::stdout_color_mt("CertificateBinding");
+  platform_healthy_ = true;
+
+  if (::HttpInitialize(
+      HTTPAPI_VERSION_1, HTTP_INITIALIZE_CONFIG, NULL) != NO_ERROR) {
+    logger_->trace("httpapi initialization failed");
+    platform_healthy_ = false;
   }
-  
-  auto [guid, guid_success] = GuidToString(data.ParamDesc.AppId);
-  if (guid_success) {
-    app_id = guid;
+
+  WSADATA data{};
+  if (platform_healthy_ && ::WSAStartup(MAKEWORD(2, 2), &data) != NO_ERROR) {
+    logger_->trace("winsock initialization failed");
+    platform_healthy_ = false;
   }
 }
 
-bindssl::Result<bindssl::BindingQuery>
-MakeQuery(std::shared_ptr<bindssl::Endpoint> address) {
-  return std::make_tuple(bindssl::BindingQuery{
-    HttpServiceConfigQueryExact,
-    HTTP_SERVICE_CONFIG_SSL_KEY{
-      (LPSOCKADDR)address.get()
+bindssl::CertificateBinding::~CertificateBinding() {
+  WSACleanup();
+  HttpTerminate(HTTP_INITIALIZE_CONFIG, NULL);
+}
+
+bool bindssl::CertificateBinding::CheckBinding() {
+  if (!info_.is_valid || !platform_healthy_) {
+    return false;
+  }
+
+  auto [address, address_success] = bindssl::SockAddressFromString(
+    info_.endpoint);
+  if (!address_success) {
+    logger_->trace("Unable to convert endpoint to addressable socket");
+    return false;
+  }
+
+  auto query = bindssl::BindingQuery{
+    ::HttpServiceConfigQueryExact,
+    ::HTTP_SERVICE_CONFIG_SSL_KEY{
+      (::LPSOCKADDR)address.get()
     }
-  }, true);
-}
+  };
 
-bindssl::Result<bindssl::BindingSet>
-MakeNewBindingSet(std::string address, std::string hash_s, std::string guid_s) {
-  bindssl::BindingSet set{};
-  auto [endpoint, endpoint_success] = bindssl::SockAddressFromString(address);
-  if (!endpoint_success) {
-    return std::make_tuple(std::move(set), false);
-  }
-
-  auto [hashbytes, hashbytes_success] = bindssl::ConvertHexToBytes(hash_s);
-  if (!hashbytes_success) {
-    return std::make_tuple(std::move(set), false);
-  }
-
-  auto [guid, guid_success] = bindssl::GuidFromString(guid_s);
-  if (!guid_success) {
-    return std::make_tuple(std::move(set), false);
-  }
-
-  set.KeyDesc.pIpPort = (LPSOCKADDR)endpoint.get();
-  set.ParamDesc.AppId = guid;
-  set.ParamDesc.pSslHash = &hashbytes[0];
-  set.ParamDesc.SslHashLength = hashbytes.size();
-  set.ParamDesc.pSslCertStoreName = L"My";
-
-  return std::make_tuple(std::move(set), true);
-}
-
-bindssl::Result<bindssl::ULong>
-bindssl::GetQueryBindingSize(const bindssl::BindingQuery& query) {
-  ULong size{0};
-  HRESULT hr = HttpQueryServiceConfiguration(
+  bindssl::ULong size{0};
+  if (::HttpQueryServiceConfiguration(
       NULL, HttpServiceConfigSSLCertInfo,
       (void*)&query, sizeof(query), nullptr,
-      size, &size, NULL);
+      size, &size, NULL) != ERROR_INSUFFICIENT_BUFFER) {
+    logger_->trace("Unable to query httpapi for binding size");
+    return false;
+  }
 
-  return std::make_tuple(size, hr == ERROR_INSUFFICIENT_BUFFER);
-}
-
-bindssl::Result<std::shared_ptr<bindssl::CertificateBinding>>
-bindssl::GetBinding(const std::string endpoint,
-    const bindssl::BindingQuery& query,
-    bindssl::ULong size) {
-  bindssl::BindingSet data{};
-  HRESULT hr = HttpQueryServiceConfiguration(
+  ::HTTP_SERVICE_CONFIG_SSL_SET data{};
+  if (::HttpQueryServiceConfiguration(
       NULL, HttpServiceConfigSSLCertInfo,
       (void*)&query, sizeof(query), &data,
-      size, &size, NULL);
-  if (hr != NO_ERROR) {
-    return std::make_tuple(nullptr, false);  
+      size, NULL, NULL) != NO_ERROR) {
+    logger_->trace("Unable to query httpapi for binding info");
+    return false;
   }
 
-  auto binding = std::make_shared<CertificateBinding>(CertificateBinding(data));
-  binding->endpoint = endpoint;
-  return std::make_tuple(binding, true);
+  auto hash_bytes = std::vector<bindssl::Byte>(
+      (Byte*)data.ParamDesc.pSslHash,
+      (Byte*)data.ParamDesc.pSslHash + (int)data.ParamDesc.SslHashLength);  
+
+  return info_.hash_bytes == hash_bytes &&
+      info_.app_id_guid == data.ParamDesc.AppId;
 }
 
-bindssl::Result<std::shared_ptr<bindssl::CertificateBinding>>
-bindssl::SetBinding(
-    const std::string& endpoint,
-    const bindssl::BindingSet& set) {
-  HRESULT hr = HttpSetServiceConfiguration(
-    NULL, HttpServiceConfigSSLCertInfo, (PVOID)&set, sizeof(set), NULL);
-  if (hr == NO_ERROR) {
-    return std::make_tuple(
-        std::make_shared<CertificateBinding>(CertificateBinding(set)), true);
+bool bindssl::CertificateBinding::Rebind() {
+  if (!info_.is_valid || !platform_healthy_) {
+    return false;
   }
-  return std::make_tuple(nullptr, false);
+
+  auto [address, address_success] = bindssl::SockAddressFromString(
+    info_.endpoint);
+  if (!address_success) {
+    logger_->trace("Unable to convert endpoint to addressable socket");
+    return false;
+  }
+
+  bindssl::BindingSet set{};
+  set.KeyDesc.pIpPort = (LPSOCKADDR)address.get();
+  set.ParamDesc.AppId = info_.app_id_guid;
+  set.ParamDesc.pSslHash = (PVOID)&info_.hash_bytes[0];
+  set.ParamDesc.SslHashLength = info_.hash_bytes.size();
+  set.ParamDesc.pSslCertStoreName = L"My";
+
+  return HttpSetServiceConfiguration(
+      NULL, HttpServiceConfigSSLCertInfo, (PVOID)&set,
+      sizeof(set), NULL) == NO_ERROR;
 }

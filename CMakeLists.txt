@@ -30,20 +30,19 @@ FetchContent_Declare(
 add_library(
   ${PROJECT_NAME}
     
-  inc/bind_ssl.h
   inc/certificate_binding.h
   inc/endpoint.h
   inc/guid.h
-  inc/hash.h
+  inc/convert.h
   inc/platform.h
   inc/primitives.h
   inc/result.h
 
-  src/bind_ssl.cc
   src/certificate_binding.cc
+  src/certificate_binding_info.cc
   src/endpoint.cc
   src/guid.cc
-  src/hash.cc
+  src/convert.cc
 )
 
 # set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 17)
