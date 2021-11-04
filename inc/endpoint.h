@@ -12,6 +12,7 @@ namespace bindssl
 
 typedef SOCKADDR Endpoint;
 
+void ClearEndpointCache();
 Result<std::shared_ptr<Endpoint>> SockAddressFromString(
   const std::string& endpoint);
 

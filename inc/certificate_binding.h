@@ -33,6 +33,7 @@ class CertificateBinding {
  private:
   CertificateBindingInfo          info_;
   std::shared_ptr<spdlog::logger> logger_;
+  ::HLOCAL                        platform_data_;
   bool                            platform_healthy_;
 };
 

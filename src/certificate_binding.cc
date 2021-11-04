@@ -17,23 +17,28 @@ bindssl::CertificateBinding::CertificateBinding(
   info_ = CertificateBindingInfo(endpoint, hash, appid);
   logger_ = spdlog::stdout_color_mt("CertificateBinding");
   platform_healthy_ = true;
+  platform_data_ = NULL;
 
   if (::HttpInitialize(
       HTTPAPI_VERSION_1, HTTP_INITIALIZE_CONFIG, NULL) != NO_ERROR) {
-    logger_->trace("httpapi initialization failed");
+    logger_->error("httpapi initialization failed");
     platform_healthy_ = false;
   }
 
   WSADATA data{};
   if (platform_healthy_ && ::WSAStartup(MAKEWORD(2, 2), &data) != NO_ERROR) {
-    logger_->trace("winsock initialization failed");
+    logger_->error("winsock initialization failed");
     platform_healthy_ = false;
   }
 }
 
 bindssl::CertificateBinding::~CertificateBinding() {
+  bindssl::ClearEndpointCache();
   WSACleanup();
   HttpTerminate(HTTP_INITIALIZE_CONFIG, NULL);
+  if (platform_data_) {
+    LocalFree(platform_data_);
+  }
 }
 
 bool bindssl::CertificateBinding::CheckBinding() {
@@ -44,10 +49,10 @@ bool bindssl::CertificateBinding::CheckBinding() {
   auto [address, address_success] = bindssl::SockAddressFromString(
     info_.endpoint);
   if (!address_success) {
-    logger_->trace("Unable to convert endpoint to addressable socket");
     return false;
   }
 
+  logger_->trace("Querying httpapi for certificate binding");
   auto query = bindssl::BindingQuery{
     ::HttpServiceConfigQueryExact,
     ::HTTP_SERVICE_CONFIG_SSL_KEY{
@@ -60,25 +65,27 @@ bool bindssl::CertificateBinding::CheckBinding() {
       NULL, HttpServiceConfigSSLCertInfo,
       (void*)&query, sizeof(query), nullptr,
       size, &size, NULL) != ERROR_INSUFFICIENT_BUFFER) {
-    logger_->trace("Unable to query httpapi for binding size");
+    logger_->warn("Unable to query httpapi for binding size");
     return false;
   }
 
-  ::HTTP_SERVICE_CONFIG_SSL_SET data{};
+  HLOCAL platform_data_ = LocalAlloc(LMEM_FIXED, size);
   if (::HttpQueryServiceConfiguration(
       NULL, HttpServiceConfigSSLCertInfo,
-      (void*)&query, sizeof(query), &data,
+      (void*)&query, sizeof(query), platform_data_,
       size, NULL, NULL) != NO_ERROR) {
-    logger_->trace("Unable to query httpapi for binding info");
+    logger_->warn("Unable to query httpapi for binding info");
     return false;
   }
 
+  auto set = (PHTTP_SERVICE_CONFIG_SSL_SET)platform_data_;
   auto hash_bytes = std::vector<bindssl::Byte>(
-      (Byte*)data.ParamDesc.pSslHash,
-      (Byte*)data.ParamDesc.pSslHash + (int)data.ParamDesc.SslHashLength);  
+      (Byte*)set->ParamDesc.pSslHash,
+      (Byte*)set->ParamDesc.pSslHash + (int)set->ParamDesc.SslHashLength);
 
+  logger_->trace("Validating hash and appid against binding");
   return info_.hash_bytes == hash_bytes &&
-      info_.app_id_guid == data.ParamDesc.AppId;
+      info_.app_id_guid == set->ParamDesc.AppId;
 }
 
 bool bindssl::CertificateBinding::Rebind() {
@@ -89,9 +96,10 @@ bool bindssl::CertificateBinding::Rebind() {
   auto [address, address_success] = bindssl::SockAddressFromString(
     info_.endpoint);
   if (!address_success) {
-    logger_->trace("Unable to convert endpoint to addressable socket");
     return false;
   }
+
+  logger_->trace("Attempting to configure new binding");
 
   bindssl::BindingSet set{};
   set.KeyDesc.pIpPort = (LPSOCKADDR)address.get();
@@ -100,7 +108,13 @@ bool bindssl::CertificateBinding::Rebind() {
   set.ParamDesc.SslHashLength = info_.hash_bytes.size();
   set.ParamDesc.pSslCertStoreName = L"My";
 
-  return HttpSetServiceConfiguration(
-      NULL, HttpServiceConfigSSLCertInfo, (PVOID)&set,
-      sizeof(set), NULL) == NO_ERROR;
+  HRESULT hr = ::HttpSetServiceConfiguration(
+      NULL, HttpServiceConfigSSLCertInfo, &set,
+      sizeof(set), NULL);
+  if (hr != NO_ERROR) {
+    logger_->warn("Failed to configure binding, httpapi error {}", hr);
+    return false;
+  }
+
+  return true;
 }
