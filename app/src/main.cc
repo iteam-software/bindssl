@@ -18,11 +18,9 @@ int main(int argc, char** argv)
 	};
 
 	level_enum level{info};
-	string endpoint = "0.0.0.0:43301";
-	string hash = "e635112919bdf5ca852723559d8a18813ae79ecd";
-	// string hash = "e635112919bdf5ca852723559d8a18813ae79ece";
-	string appid = "214124cd-d05b-4309-9af9-9caa44b2b74a";
-	// string appid = "214124cd-d05b-4309-9af9-9caa44b2b743";
+	string endpoint;
+	string hash;
+	string appid;
 
 	// enum mapper for loglevel
 	map<string, level_enum> maplevel{
