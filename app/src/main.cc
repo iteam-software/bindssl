@@ -28,9 +28,12 @@ int main(int argc, char** argv)
 		{"warning", warn},
 		{"trace", trace}};
 
-	app.add_option("-e,--endpoint", endpoint, "The endpoint to check");
-	app.add_option("-H,--hash", hash, "The certificate hash to check");
-	app.add_option("-a,--appid", appid, "The appid to bind");
+	app.add_option("-e,--endpoint", endpoint, "The endpoint to check")
+		->required();
+	app.add_option("-H,--hash", hash, "The certificate hash to check")
+		->required();
+	app.add_option("-a,--appid", appid, "The appid to bind")
+		->required();
 
 	app.add_option("-v,--verbosity", level, "Log level")
 		->transform(CLI::CheckedTransformer(maplevel, CLI::ignore_case));
