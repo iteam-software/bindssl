@@ -4,7 +4,7 @@ bindssl ensures a http binding exists given an endpoint, hash and appid.
 
 ## Usage
 ```
-> ./bindssl.exe -endpoint 0.0.0.0:443 -hash e635112919bdf5ca852723559d8d18813ae73ecd -appid 214124cd-d05b-4309-9af9-9caa44b2b74a -v trace
+> ./bindssl.exe --endpoint 0.0.0.0:443 --hash e635112919bdf5ca852723559d8d18813ae73ecd --appid 214124cd-d05b-4309-9af9-9caa44b2b74a -v trace
 ```
 
 Example output:
